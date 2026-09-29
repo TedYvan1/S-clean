@@ -8,9 +8,23 @@ const COOKIE_MAX_AGE = 60 * 60 * 24 * 30;
 let client: SupabaseClient | null = null;
 let adminClient: SupabaseClient | null = null;
 
+function getSupabaseUrl() {
+  return process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL ?? "";
+}
+
+function getSupabaseKey() {
+  return process.env.SUPABASE_KEY ?? process.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? "";
+}
+
+function getSupabaseServiceRoleKey() {
+  return process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.VITE_SUPABASE_SECRET_KEY ?? "";
+}
+
 export function getSupabaseClient() {
-  if (!client && process.env.SUPABASE_URL && process.env.SUPABASE_KEY) {
-    client = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY, {
+  const url = getSupabaseUrl();
+  const key = getSupabaseKey();
+  if (!client && url && key) {
+    client = createClient(url, key, {
       auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
     });
   }
@@ -18,8 +32,10 @@ export function getSupabaseClient() {
 }
 
 export function getSupabaseAdminClient() {
-  if (!adminClient && process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    adminClient = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
+  const url = getSupabaseUrl();
+  const key = getSupabaseServiceRoleKey();
+  if (!adminClient && url && key) {
+    adminClient = createClient(url, key, {
       auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
     });
   }
