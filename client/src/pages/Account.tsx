@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { CalendarDays, CarFront, Loader2, LogIn, MapPin, ReceiptText, ShieldCheck, UserRound } from "lucide-react";
 import { toast } from "sonner";
@@ -17,6 +17,25 @@ export default function Account() {
   const roleQuery = trpc.auth.supabaseRole.useQuery(undefined, { enabled: Boolean(authMeQuery.data), retry: false, refetchOnWindowFocus: false });
   const historyQuery = trpc.account.supabaseHistory.useQuery(undefined, { enabled: Boolean(authMeQuery.data), retry: false, refetchOnWindowFocus: false });
   const signOut = trpc.auth.signOut.useMutation({ onSuccess: () => void authMeQuery.refetch() });
+  const redirectAfterAuth = useCallback(async (fallbackPath = "/account") => {
+    try {
+      const { data: me } = await authMeQuery.refetch();
+      if (!me) {
+        setLocation(fallbackPath);
+        return;
+      }
+      const { data: role } = await roleQuery.refetch();
+      if (role === "admin" || role === "staff") {
+        setLocation("/admin");
+        return;
+      }
+      const destination = nextPath && nextPath.startsWith("/") ? nextPath : fallbackPath;
+      setLocation(destination);
+    } catch {
+      setLocation(fallbackPath);
+    }
+  }, [authMeQuery, nextPath, roleQuery, setLocation]);
+
   useEffect(() => {
     if (roleQuery.data === "admin" || roleQuery.data === "staff") {
       const destination = nextPath && nextPath.startsWith("/") ? nextPath : "/admin";
@@ -24,7 +43,7 @@ export default function Account() {
     }
   }, [nextPath, roleQuery.data, setLocation]);
   if (authMeQuery.isLoading || (authMeQuery.data && roleQuery.isLoading)) return <AccountFrame><div className="account-loading"><Loader2 className="spin" size={22} /> Vérification de votre session…</div></AccountFrame>;
-  if (!authMeQuery.data) return <AccountFrame><AuthPanel onAuthenticated={() => void authMeQuery.refetch()} /></AccountFrame>;
+  if (!authMeQuery.data) return <AccountFrame><AuthPanel onAuthenticated={() => void redirectAfterAuth("/account")} /></AccountFrame>;
   const user = authMeQuery.data;
   const bookings = (historyQuery.data ?? []) as HistoryBooking[];
   const nextBooking = bookings.find((booking) => ["confirmed", "pending", "in_progress"].includes(booking.status));
@@ -36,8 +55,8 @@ function AuthPanel({ onAuthenticated }: { onAuthenticated: () => void }) {
   const [mode, setMode] = useState<AuthMode>(() => new URLSearchParams(window.location.search).get("mode") === "register" ? "register" : "login");
   const [form, setForm] = useState({ fullName: "", email: "", password: "" });
   const [message, setMessage] = useState("");
-  const signIn = trpc.auth.signIn.useMutation({ onSuccess: () => { toast.success("Connexion réussie."); onAuthenticated(); }, onError: (error) => toast.error(error.message) });
-  const signUp = trpc.auth.signUp.useMutation({ onSuccess: (data) => { const successMessage = data.requiresEmailConfirmation ? "Compte créé avec succès. Vérifiez votre email pour l'activer." : "Compte créé avec succès. Bienvenue chez S'Clean."; setMessage(successMessage); toast.success(successMessage); onAuthenticated(); }, onError: (error) => toast.error(error.message) });
+  const signIn = trpc.auth.signIn.useMutation({ onSuccess: async () => { toast.success("Connexion réussie."); if (onAuthenticated) await onAuthenticated(); }, onError: (error) => toast.error(error.message) });
+  const signUp = trpc.auth.signUp.useMutation({ onSuccess: async (data) => { const successMessage = data.requiresEmailConfirmation ? "Compte créé avec succès. Vérifiez votre email pour l'activer." : "Compte créé avec succès. Bienvenue chez S'Clean."; setMessage(successMessage); toast.success(successMessage); if (onAuthenticated) await onAuthenticated(); }, onError: (error) => toast.error(error.message) });
   const googleUrl = trpc.auth.oauthUrl.useQuery({ provider: "google" }, { enabled: false, retry: false });
   const appleUrl = trpc.auth.oauthUrl.useQuery({ provider: "apple" }, { enabled: false, retry: false });
   const update = (key: keyof typeof form, value: string) => setForm((current) => ({ ...current, [key]: value }));
