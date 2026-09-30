@@ -16,7 +16,13 @@ export default function Account() {
   const authMeQuery = trpc.auth.supabaseMe.useQuery(undefined, { retry: false, refetchOnWindowFocus: false });
   const roleQuery = trpc.auth.supabaseRole.useQuery(undefined, { enabled: Boolean(authMeQuery.data), retry: false, refetchOnWindowFocus: false });
   const historyQuery = trpc.account.supabaseHistory.useQuery(undefined, { enabled: Boolean(authMeQuery.data), retry: false, refetchOnWindowFocus: false });
-  const signOut = trpc.auth.signOut.useMutation({ onSuccess: () => void authMeQuery.refetch() });
+  const signOut = trpc.auth.signOut.useMutation({
+    onSuccess: () => {
+      void authMeQuery.refetch();
+      setLocation("/account?mode=login");
+    },
+    onError: () => setLocation("/account?mode=login"),
+  });
   const redirectAfterAuth = useCallback(async (fallbackPath = "/account") => {
     try {
       const { data: me } = await authMeQuery.refetch();

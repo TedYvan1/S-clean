@@ -114,7 +114,7 @@ export default function Home() {
         <div className="container footer-grid">
           <div><BrandLogo className="footer-logo" /><p style={{ marginTop: 17, maxWidth: 220 }}>Lavage automobile professionnel à domicile. Le soin se déplace chez vous.</p></div>
           <div><h4>Navigation</h4><a href="#prestations">Prestations</a><a href="#parcours">Réservation</a><a href="#zones">Zones desservies</a><Link href="/admin">Espace admin</Link></div>
-          <div><h4>Contact</h4><a href="tel:+2250700000000">+225 07 00 00 00 00</a><a href="https://wa.me/2250700000000">WhatsApp</a><a href="mailto:bonjour@sclean.ci">bonjour@sclean.ci</a></div>
+          <div><h4>Contact</h4><a href="tel:+2250700000000">+225 07 97 35 45 90</a><a href="https://wa.me/2250700000000">WhatsApp</a><a href="mailto:bonjour@sclean.ci">bonjour@sclean.ci</a></div>
           <div><h4>La promesse</h4><p>Des créneaux visibles en temps réel. Un rendez-vous confirmé en quelques clics.</p><Link href="/booking" className="btn btn-champagne" style={{ marginTop: 8 }}>Réserver <ArrowRight size={14} /></Link></div>
         </div>
         <div className="container footer-bottom"><span>© S'Clean — Groupe Story's</span><span>Service premium à domicile · Abidjan</span></div>

@@ -57,7 +57,7 @@ export default function Booking() {
   const [currentYear, setCurrentYear] = useState(() => new Date().getFullYear());
 
   const [selectedSlot, setSelectedSlot] = useState("09:00");
-  const [address, setAddress] = useState({ neighborhood: "Riviera", street: "Rue des Jardins, Cocody", landmark: "Près de la pharmacie les Orchidées", phone: "+225 07 00 00 00 00" });
+  const [address, setAddress] = useState({ neighborhood: "Riviera", street: "Rue des Jardins, Cocody", landmark: "Près de la pharmacie les Orchidées", phone: "+225 07 97 35 45 90" });
   const [confirmed, setConfirmed] = useState(false);
   const [bookingNumber, setBookingNumber] = useState("");
 
