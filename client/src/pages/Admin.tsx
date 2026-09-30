@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
-import { CalendarDays, FileText, LayoutDashboard, Loader2, LockKeyhole, RefreshCw, WalletCards } from "lucide-react";
-import { Link } from "wouter";
+import { CalendarDays, FileText, LayoutDashboard, Loader2, LockKeyhole, LogOut, RefreshCw, WalletCards } from "lucide-react";
+import { Link, useLocation } from "wouter";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import BrandLogo from "@/components/BrandLogo";
@@ -13,11 +13,20 @@ const nav = [
 const statusLabels: Record<string, string> = { pending: "En attente", confirmed: "Confirmée", completed: "Terminée", cancelled: "Annulée", in_progress: "En cours", no_show: "No-show" };
 
 export default function Admin() {
+  const [, setLocation] = useLocation();
   const [active, setActive] = useState("Dashboard");
   const access = trpc.admin.access.useQuery(undefined, { retry: false, refetchOnWindowFocus: false });
+  const signOut = trpc.auth.signOut.useMutation({
+    onSuccess: () => {
+      setLocation("/account?mode=login");
+    },
+    onError: () => {
+      setLocation("/account?mode=login");
+    },
+  });
   if (access.isLoading) return <AdminAuthState loading />;
   if (access.isError || !access.data) return <AdminAuthState message={access.error?.message} />;
-  return <div className="admin-page"><aside className="admin-sidebar"><div className="admin-brand"><BrandLogo /><small>Back-office connecté</small></div><nav className="admin-nav" aria-label="Navigation administrateur">{nav.map(({ label, icon: Icon }) => <button key={label} className={active === label ? "active" : ""} onClick={() => setActive(label)}><Icon size={15} />{label}</button>)}</nav><div className="admin-footer">Données Supabase<br />Rôle : {access.data.role}</div></aside><main className="admin-content"><div className="admin-topbar"><div><div className="eyebrow">S'Clean · pilotage</div><h1>{active}</h1><p>Les données affichées proviennent de la base de production.</p></div><span className="status confirmed">Connecté</span></div>{active === "Dashboard" && <Dashboard onNavigate={setActive} />}{active === "Réservations" && <Bookings />}{active === "Prestations" && <Services />}</main></div>;
+  return <div className="admin-page"><aside className="admin-sidebar"><div className="admin-brand"><BrandLogo /><small>Back-office connecté</small></div><nav className="admin-nav" aria-label="Navigation administrateur">{nav.map(({ label, icon: Icon }) => <button key={label} className={active === label ? "active" : ""} onClick={() => setActive(label)}><Icon size={15} />{label}</button>)}</nav><div className="admin-footer"><div>Données Supabase<br />Rôle : {access.data.role}</div><button className="btn btn-outline" onClick={() => signOut.mutate()}><LogOut size={14} /> Déconnexion</button></div></aside><main className="admin-content"><div className="admin-topbar"><div><div className="eyebrow">S'Clean · pilotage</div><h1>{active}</h1><p>Les données affichées proviennent de la base de production.</p></div><span className="status confirmed">Connecté</span></div>{active === "Dashboard" && <Dashboard onNavigate={setActive} />}{active === "Réservations" && <Bookings />}{active === "Prestations" && <Services />}</main></div>;
 }
 
 function AdminAuthState({ loading, message }: { loading?: boolean; message?: string }) { return <div className="admin-auth-page"><div className="admin-auth-card"><BrandLogo /><div className="admin-auth-icon">{loading ? <Loader2 className="spin" size={25} /> : <LockKeyhole size={25} />}</div><div className="eyebrow">Administration S'Clean</div><h1>{loading ? "Vérification de l’accès…" : "Espace sécurisé"}</h1><p>{loading ? "Nous vérifions votre session et votre rôle." : message ?? "Connectez-vous avec un compte administrateur ou staff autorisé."}</p>{!loading && <Link className="btn btn-primary" href="/account?mode=login&next=%2Fadmin">Se connecter à l’administration</Link>}</div></div>; }

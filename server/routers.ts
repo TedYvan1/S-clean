@@ -78,7 +78,7 @@ export const appRouter = router({
       const result: Array<{ time: string; status: "available" | "reserved" | "pause" }> = [];
       for (let start = 8 * 60; start + input.durationMinutes <= 18 * 60; start += 60) {
         const end = start + input.durationMinutes;
-        const overlapsPause = start < 13 * 60 && end > 12 * 60;
+        const overlapsPause = start >= 12 * 60 + 30 && start < 13 * 60 && end > 12 * 60;
         const overlaps = existing.some((b) => { const a = b.startTime.split(":").map(Number); const z = b.endTime.split(":").map(Number); const bs = a[0] * 60 + a[1]; const be = z[0] * 60 + z[1]; return start < be + 30 && end + 30 > bs; });
         result.push({ time: `${String(Math.floor(start / 60)).padStart(2, "0")}:${String(start % 60).padStart(2, "0")}`, status: overlapsPause ? "pause" : overlaps ? "reserved" : "available" });
       }
