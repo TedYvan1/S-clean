@@ -12,16 +12,64 @@ type AuthMode = "login" | "register";
 
 export default function Account() {
   const [, setLocation] = useLocation();
+  const searchParams = new URLSearchParams(window.location.search);
+  const nextPath = searchParams.get("next");
+  const isAdminAccessFlow = nextPath === "/admin" || (nextPath ?? "").startsWith("/admin?") || searchParams.get("mode") === "login" && nextPath === "/admin";
+  const authMeQuery = trpc.auth.supabaseMe.useQuery(undefined, { retry: false, refetchOnWindowFocus: false });
+  const roleQuery = trpc.auth.supabaseRole.useQuery(undefined, { enabled: Boolean(authMeQuery.data), retry: false, refetchOnWindowFocus: false });
+  const historyQuery = trpc.account.supabaseHistory.useQuery(undefined, { enabled: Boolean(authMeQuery.data), retry: false, refetchOnWindowFocus: false });
+  const signOut = trpc.auth.signOut.useMutation({
+    onSuccess: () => {
+      void authMeQuery.refetch();
+      setLocation("/account?mode=login&next=%2Fadmin");
+    },
+    onError: () => setLocation("/account?mode=login&next=%2Fadmin"),
+  });
+
+  const redirectAfterAuth = useCallback(async (fallbackPath = "/account") => {
+    try {
+      const { data: me } = await authMeQuery.refetch();
+      if (!me) {
+        setLocation(fallbackPath);
+        return;
+      }
+      const { data: role } = await roleQuery.refetch();
+      if (role === "admin" || role === "staff") {
+        setLocation("/admin");
+        return;
+      }
+      const destination = nextPath && nextPath.startsWith("/") ? nextPath : fallbackPath;
+      setLocation(destination);
+    } catch {
+      setLocation(fallbackPath);
+    }
+  }, [authMeQuery, nextPath, roleQuery, setLocation]);
 
   useEffect(() => {
-    setLocation("/booking");
-  }, [setLocation]);
+    if (!isAdminAccessFlow) {
+      setLocation("/booking");
+      return;
+    }
+    if (roleQuery.data === "admin" || roleQuery.data === "staff") {
+      const destination = nextPath && nextPath.startsWith("/") ? nextPath : "/admin";
+      setLocation(destination);
+    }
+  }, [isAdminAccessFlow, nextPath, roleQuery.data, setLocation]);
 
-  return <AccountFrame><div className="account-loading"><Loader2 className="spin" size={22} /> Redirection vers la réservation…</div></AccountFrame>;
+  if (!isAdminAccessFlow) return <AccountFrame><div className="account-loading"><Loader2 className="spin" size={22} /> Redirection vers la réservation…</div></AccountFrame>;
+  if (authMeQuery.isLoading || (authMeQuery.data && roleQuery.isLoading)) return <AccountFrame><div className="account-loading"><Loader2 className="spin" size={22} /> Vérification de votre session…</div></AccountFrame>;
+  if (!authMeQuery.data) return <AccountFrame><AuthPanel isAdmin onAuthenticated={() => void redirectAfterAuth("/account?next=%2Fadmin")} /></AccountFrame>;
+
+  const user = authMeQuery.data;
+  const bookings = (historyQuery.data ?? []) as HistoryBooking[];
+  const nextBooking = bookings.find((booking) => ["confirmed", "pending", "in_progress"].includes(booking.status));
+  const firstName = user.user_metadata?.full_name?.split(" ")[0] ?? user.email?.split("@")[0] ?? "vous";
+
+  return <div className="account-page"><header className="navbar"><div className="container navbar-inner"><BrandLogo /><div className="account-header-actions"><span className="account-user"><span className="avatar">{initials(user.user_metadata?.full_name, user.email)}</span>{user.user_metadata?.full_name ?? user.email}</span><button className="btn btn-outline" onClick={() => signOut.mutate()}>Se déconnecter</button></div></div></header><main className="container account-content"><div className="account-heading"><div><div className="eyebrow">Votre espace personnel</div><h1>Bonjour, {firstName}.</h1><p>Suivez vos rendez-vous et retrouvez l'historique de vos soins S'Clean.</p></div><Link className="btn btn-primary" href="/booking">Réserver un lavage <CalendarDays size={15} /></Link></div><section className="account-grid"><div className="account-main-column"><div className="account-card account-next-card"><div className="account-card-heading"><div><div className="eyebrow">Prochaine réservation</div><h2>{nextBooking ? "Votre prochain rendez-vous" : "Prêt pour votre prochain soin ?"}</h2></div><CalendarDays size={20} color="var(--champagne)" /></div>{historyQuery.isLoading ? <AccountSkeleton /> : historyQuery.error ? <div className="account-empty"><p>Impossible de charger vos réservations pour le moment.</p><button className="text-link" onClick={() => void historyQuery.refetch()}>Réessayer</button></div> : nextBooking ? <BookingDetail booking={nextBooking} /> : <div className="account-empty"><div className="empty-icon"><CarFront size={20} /></div><p>Vous n'avez encore aucune réservation.</p><Link className="btn btn-champagne" href="/booking">Réserver mon premier lavage</Link></div>}</div><div className="account-card"><div className="account-card-heading"><div><div className="eyebrow">Votre activité</div><h2>Historique des réservations</h2></div><ReceiptText size={20} color="var(--sage)" /></div>{historyQuery.isLoading ? <AccountSkeleton rows={3} /> : historyQuery.error ? <div className="account-empty"><p>Votre historique est momentanément indisponible.</p></div> : bookings.length === 0 ? <div className="account-empty"><p>Vos réservations passées apparaîtront ici après votre premier lavage.</p></div> : <div className="history-list">{bookings.map((booking) => <BookingRow key={booking.bookingNumber} booking={booking} />)}</div>}</div></div><aside className="account-side-column"><div className="account-card profile-card"><div className="profile-avatar"><UserRound size={22} /></div><h2>{user.user_metadata?.full_name ?? "Client S'Clean"}</h2><p>{user.email ?? user.phone ?? "Compte connecté"}</p><div className="profile-line"><ShieldCheck size={14} /> Compte vérifié par Supabase</div><div className="profile-line"><CarFront size={14} /> Vos véhicules sont associés à vos réservations</div></div><div className="account-card help-card"><div className="eyebrow">Besoin d'aide ?</div><h2>Nous sommes là pour vous.</h2><p>Une question sur votre rendez-vous ? Contactez l'équipe S'Clean directement.</p><a className="btn btn-outline" href="https://wa.me/2250700000000">Écrire sur WhatsApp</a></div></aside></section></main></div>;
 }
 
-function AuthPanel({ onAuthenticated }: { onAuthenticated: () => void }) {
-  const [mode, setMode] = useState<AuthMode>(() => new URLSearchParams(window.location.search).get("mode") === "register" ? "register" : "login");
+function AuthPanel({ onAuthenticated, isAdmin = false }: { onAuthenticated: () => void; isAdmin?: boolean }) {
+  const [mode, setMode] = useState<AuthMode>("login");
   const [form, setForm] = useState({ fullName: "", email: "", password: "" });
   const [message, setMessage] = useState("");
   const signIn = trpc.auth.signIn.useMutation({ onSuccess: async () => { toast.success("Connexion réussie."); if (onAuthenticated) await onAuthenticated(); }, onError: (error) => toast.error(error.message) });
@@ -30,7 +78,10 @@ function AuthPanel({ onAuthenticated }: { onAuthenticated: () => void }) {
   const appleUrl = trpc.auth.oauthUrl.useQuery({ provider: "apple" }, { enabled: false, retry: false });
   const update = (key: keyof typeof form, value: string) => setForm((current) => ({ ...current, [key]: value }));
   const oauth = async (provider: "google" | "apple") => { const result = provider === "google" ? await googleUrl.refetch() : await appleUrl.refetch(); if (result.data?.url) window.location.href = result.data.url; else toast.error("Ce fournisseur OAuth n'est pas encore activé dans Supabase."); };
-  return <div className="account-login"><div className="account-login-icon">{mode === "register" ? <UserRound size={24} /> : <LogIn size={24} />}</div><div className="eyebrow">Espace client S'Clean</div><h1>{mode === "register" ? "Créez votre compte." : "Retrouvez vos rendez-vous."}</h1><p>{mode === "register" ? "Un compte personnel pour retrouver votre historique et réserver plus rapidement." : "Connectez-vous pour consulter votre historique, vos véhicules et vos prochains lavages."}</p><div className="auth-tabs auth-tabs-two"><button className={mode === "login" ? "active" : ""} onClick={() => { setMode("login"); setMessage(""); }}>Se connecter</button><button className={mode === "register" ? "active" : ""} onClick={() => { setMode("register"); setMessage(""); }}>Créer un compte</button></div><div className="auth-form">{mode === "register" && <Field label="Nom complet" value={form.fullName} onChange={(value) => update("fullName", value)} placeholder="Votre nom et prénom" />}<Field label="Email" value={form.email} onChange={(value) => update("email", value)} placeholder="vous@exemple.com" type="email" /><Field label="Mot de passe" value={form.password} onChange={(value) => update("password", value)} placeholder="8 caractères minimum" type="password" />{message && <div className="auth-message">{message}</div>}<button className="btn btn-primary" onClick={() => mode === "register" ? signUp.mutate({ email: form.email, password: form.password, fullName: form.fullName }) : signIn.mutate({ identifier: form.email, password: form.password })} disabled={signIn.isPending || signUp.isPending}>{signIn.isPending || signUp.isPending ? "Patientez…" : mode === "register" ? "Créer mon compte" : "Se connecter"} <LogIn size={15} /></button><div className="auth-divider"><span>ou continuer avec</span></div><div className="auth-socials"><button className="btn btn-outline" onClick={() => void oauth("google")}>Google</button><button className="btn btn-outline" onClick={() => void oauth("apple")}>Apple</button></div></div><p className="account-secure"><ShieldCheck size={14} /> Vos données d'authentification sont gérées par Supabase</p><Link className="text-link" href="/">Retour à l'accueil</Link></div>;
+
+  const showRegistration = !isAdmin;
+
+  return <div className="account-login"><div className="account-login-icon"><LogIn size={24} /></div><div className="eyebrow">{isAdmin ? "Administration S'Clean" : "Espace client S'Clean"}</div><h1>{isAdmin ? "Accès réservé au personnel" : "Retrouvez vos rendez-vous."}</h1><p>{isAdmin ? "Connectez-vous avec un compte administrateur ou staff autorisé." : "Connectez-vous pour consulter votre historique, vos véhicules et vos prochains lavages."}</p>{showRegistration && <div className="auth-tabs auth-tabs-two"><button className={mode === "login" ? "active" : ""} onClick={() => { setMode("login"); setMessage(""); }}>Se connecter</button><button className={mode === "register" ? "active" : ""} onClick={() => { setMode("register"); setMessage(""); }}>Créer un compte</button></div>}{!showRegistration && <div className="auth-tabs auth-tabs-two"><button className="active">Connexion sécurisée</button></div>}<div className="auth-form">{mode === "register" && showRegistration && <Field label="Nom complet" value={form.fullName} onChange={(value) => update("fullName", value)} placeholder="Votre nom et prénom" />}<Field label="Email" value={form.email} onChange={(value) => update("email", value)} placeholder="vous@exemple.com" type="email" /><Field label="Mot de passe" value={form.password} onChange={(value) => update("password", value)} placeholder="8 caractères minimum" type="password" />{message && <div className="auth-message">{message}</div>}<button className="btn btn-primary" onClick={() => mode === "register" && showRegistration ? signUp.mutate({ email: form.email, password: form.password, fullName: form.fullName }) : signIn.mutate({ identifier: form.email, password: form.password })} disabled={signIn.isPending || signUp.isPending}>{signIn.isPending || signUp.isPending ? "Patientez…" : showRegistration && mode === "register" ? "Créer mon compte" : "Se connecter"} <LogIn size={15} /></button>{showRegistration && <><div className="auth-divider"><span>ou continuer avec</span></div><div className="auth-socials"><button className="btn btn-outline" onClick={() => void oauth("google")}>Google</button><button className="btn btn-outline" onClick={() => void oauth("apple")}>Apple</button></div></>}</div>{showRegistration && <p className="account-secure"><ShieldCheck size={14} /> Vos données d'authentification sont gérées par Supabase</p>}<Link className="text-link" href="/">Retour à l'accueil</Link></div>;
 }
 
 function AuthCallback() { const [, setLocation] = useLocation(); const setSession = trpc.auth.setSession.useMutation({ onSuccess: () => setLocation("/account"), onError: () => setLocation("/account") }); useEffect(() => { const params = new URLSearchParams(window.location.hash.replace(/^#/, "")); const accessToken = params.get("access_token"); const refreshToken = params.get("refresh_token") ?? undefined; if (accessToken) setSession.mutate({ accessToken, refreshToken }); else setLocation("/account"); }, [setLocation, setSession]); return <AccountFrame><div className="account-loading"><Loader2 className="spin" size={22} /> Finalisation de votre connexion…</div></AccountFrame>; }

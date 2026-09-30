@@ -45,6 +45,7 @@ export default function Home() {
             <a href="#contact" onClick={() => setMenuOpen(false)}>Contact</a>
           </nav>
           <div className="nav-actions">
+            <Link href="/account?mode=login&next=%2Fadmin" className="btn btn-outline">Espace admin</Link>
             <Link href="/booking" className="btn btn-primary">Réserver maintenant <ArrowRight size={14} /></Link>
             <button className="mobile-menu" aria-label={menuOpen ? "Fermer le menu" : "Ouvrir le menu"} onClick={() => setMenuOpen((value) => !value)}>
               {menuOpen ? <X size={18} /> : <Menu size={18} />}
